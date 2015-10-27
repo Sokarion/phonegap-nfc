@@ -485,7 +485,7 @@ var nfc = {
 
     showSettings: function (win, fail) {
         cordova.exec(win, fail, "NfcPlugin", "showSettings", []);
-    }
+    },
 
 	readMifare: function (win, fail) {   
         cordova.exec(win, fail, "NfcPlugin", "readMf", []);
