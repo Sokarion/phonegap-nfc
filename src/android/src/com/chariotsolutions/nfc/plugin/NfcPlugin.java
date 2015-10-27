@@ -32,6 +32,8 @@ import android.nfc.tech.NdefFormatable;
 import android.os.Parcelable;
 import android.util.Log;
 
+import android.nfc.tech.MifareClassic;
+
 public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCompleteCallback {
 	
 	public static final Charset ISO_8859_1 = Charset.forName("ISO-8859-1");
@@ -211,6 +213,57 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
         shareTagCallback = null;
         callbackContext.success();
     }
+	
+	private void readMifare(CallbackContext callbackContext){
+ 	
+       Tag tagFromIntent = savedIntent.getParcelableExtra(NfcAdapter.EXTRA_TAG);
+ 		byte[] data;
+ 		data_nfc="test";
+ 		MifareClassic mfc = MifareClassic.get(tagFromIntent);
+ 		try {
+	        mfc.connect();
+	        secCount = mfc.getSectorCount();
+	        int sec=0;
+	        for(sec=0;sec< secCount;sec++)
+	        {
+	          if(sec>0)
+	          {
+	             data_nfc = data_nfc.concat("|");
+	          }
+	          int bloque=0;
+	          //boolean auth2 = mfc.authenticateSectorWithKeyA(sec, MifareClassic.KEY_DEFAULT);	          
+	          boolean auth2 = mfc.authenticateSectorWithKeyA(sec, NfcPlugin.KEY_CRYPTED);
+	          if(auth2)
+	          {
+	            for(bloque=0;bloque<4;bloque++)
+	    	    {
+	    	      int bIndex = 0;
+	    	      System.out.println("sec : "+sec);
+	    	      bIndex = mfc.sectorToBlock(sec);
+	    	      System.out.println("Index : "+(bIndex+" "+bloque));
+	    	      data = mfc.readBlock(bIndex+bloque);
+	    	      data_nfc = data_nfc.concat(";");
+	    	      System.out.println("Data "+getHexaString(data).trim());
+	    	      data_nfc = data_nfc.concat(getHexaString(data).trim());
+	    	      //System.out.println("HOP"+data_nfc);
+	    	    }
+	    	   }
+	        }
+	       } catch (IOException e) {
+	               //Log.e(TAG, "No Conecto", e);
+	       } finally {
+	         if (mfc != null) {
+	            try {
+	                   mfc.close();
+	            }
+	            catch (IOException e) {
+	                 //     Log.e(TAG, "Error closing tag...", e);
+	            }
+	          }
+	       }
+
+           callbackContext.success(data_nfc);
+     } 
 	
 	private void readMifare_SB(JSONArray data, CallbackContext callbackContext) throws JSONException {
     	int sector=Integer.parseInt(data.getString(0));
