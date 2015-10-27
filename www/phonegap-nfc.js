@@ -487,6 +487,13 @@ var nfc = {
         cordova.exec(win, fail, "NfcPlugin", "showSettings", []);
     }
 
+	readMifare: function (win, fail) {   
+        cordova.exec(win, fail, "NfcPlugin", "readMf", []);
+    },
+    readMifareSecBloc: function (sector,bloque,win, fail) {
+        cordova.exec(win, fail, "NfcPlugin", "readMf_SB", [sector,bloque]);
+    }
+	
 };
 
 var util = {

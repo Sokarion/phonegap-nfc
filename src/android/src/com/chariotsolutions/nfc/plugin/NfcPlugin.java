@@ -1,5 +1,6 @@
 package com.chariotsolutions.nfc.plugin;
 
+import java.nio.charset.Charset;
 import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.ArrayList;
@@ -32,6 +33,12 @@ import android.os.Parcelable;
 import android.util.Log;
 
 public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCompleteCallback {
+	
+	public static final Charset ISO_8859_1 = Charset.forName("ISO-8859-1");
+    public static final Charset UTF_8 = Charset.forName("UTF-8");
+	
+	public static final byte[] KEY_CRYPTED = {(byte)0xFF,(byte)0xFF,(byte)0xFF,(byte)0xFF,(byte)0xFF,(byte)0xFF};
+	
     private static final String REGISTER_MIME_TYPE = "registerMimeType";
     private static final String REMOVE_MIME_TYPE = "removeMimeType";
     private static final String REGISTER_NDEF = "registerNdef";
@@ -71,6 +78,13 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
 
     private CallbackContext shareTagCallback;
     private CallbackContext handoverCallback;
+	
+	private static final String READMIFARE ="readMf";
+    private static final String READMIFARE_SB="readMf_SB";
+
+    public String data_nfc;
+    private String cardNumber;
+    int secCount;
 
     @Override
     public boolean execute(String action, JSONArray data, CallbackContext callbackContext) throws JSONException {
@@ -140,7 +154,13 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
             // status is checked before every call
             // if code made it here, NFC is enabled
             callbackContext.success(STATUS_NFC_OK);
-
+			
+        } else if(action.equalsIgnoreCase(READMIFARE)){
+        	readMifare(callbackContext);
+        	
+        } else if(action.equalsIgnoreCase(READMIFARE_SB)){
+        	readMifare_SB(data,callbackContext);
+			
         } else {
             // invalid action
             return false;
@@ -163,12 +183,12 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
     private void registerDefaultTag(CallbackContext callbackContext) {
       addTagFilter();
       callbackContext.success();
-  }
+	}
 
     private void removeDefaultTag(CallbackContext callbackContext) {
       removeTagFilter();
       callbackContext.success();
-  }
+	}
 
     private void registerNdefFormatable(CallbackContext callbackContext) {
         addTechList(new String[]{NdefFormatable.class.getName()});
@@ -178,18 +198,97 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
     private void registerNdef(CallbackContext callbackContext) {
       addTechList(new String[]{Ndef.class.getName()});
       callbackContext.success();
-  }
+	}
 
     private void removeNdef(CallbackContext callbackContext) {
       removeTechList(new String[]{Ndef.class.getName()});
       callbackContext.success();
-  }
+	}
 
     private void unshareTag(CallbackContext callbackContext) {
         p2pMessage = null;
         stopNdefPush();
         shareTagCallback = null;
         callbackContext.success();
+    }
+	
+	private void readMifare_SB(JSONArray data, CallbackContext callbackContext) throws JSONException {
+    	int sector=Integer.parseInt(data.getString(0));
+    	System.out.println("sector :"+sector);
+    	int bloque=Integer.parseInt(data.getString(1));
+    	System.out.println("bloque :"+bloque);
+    	Tag tagFromIntent = savedIntent.getParcelableExtra(NfcAdapter.EXTRA_TAG);
+ 		byte[] data_mf;
+ 		data_mf = new byte[0];
+ 		data_nfc="";
+
+ 		MifareClassic mfc = MifareClassic.get(tagFromIntent);
+ 		try {
+	      mfc.connect();
+          boolean auth2 = mfc.authenticateSectorWithKeyA(sector, NfcPlugin.KEY_CRYPTED);
+	      //boolean auth2 = mfc.authenticateSectorWithKeyA(sector, MifareClassic.KEY_DEFAULT);
+		  if(auth2)
+		  {
+	   	   	int bIndex = 0;
+	        bIndex = mfc.sectorToBlock(sector); 
+	        System.out.println("Index : "+(bIndex+" "+bloque));
+	        data_mf = mfc.readBlock(bIndex+bloque);
+	        
+	        
+			for(int i = 0; i < data_mf.length; ++i) {
+				char new_char = (char)0;
+				
+				if (data_mf[i]!=0) {
+					System.out.println("BLABLA new_char "+i+" "+data_mf[i]);
+					if (data_mf[i]>0) new_char = (char)data_mf[i];
+					else new_char = (char)(data_mf[i]+256);
+					data_nfc = data_nfc + new_char;
+				}
+				//data_nfc = data_nfc + new_char;				
+			}
+			
+			System.out.println("BLABLA "+data_nfc);
+			
+			/*System.out.println("data_mf "+data_mf);
+	        //data_nfc = getHexaString(data_mf).trim();
+	        //data_nfc = new String(data_mf, UTF_8);
+	        //data_nfc = new String(data_mf,Charset.forName("UTF-8"));
+	        data_nfc = new String(data_mf);
+	        byte[] buff = new byte[1024];
+	        //buff = data_nfc.getBytes("UTF_8");
+	        buff = data_nfc.getBytes("ISO_8859_1");
+        	//buff = data_nfc.getBytes("ISO_8859_15");
+	        //buff = data_nfc.getBytes("ISO_14443");
+	        //buff = data_nfc.getBytes("ISO_15693");
+	        data_nfc_return = new String(buff, UTF_8);
+	        //new String.toByteArray()
+	        //byte ptext[] = data_mf.getBytes(ISO_8859_1); 
+	        //String value = new String(ptext, UTF_8); 
+	        System.out.println("data_nfc cleaned "+data_nfc);
+	        //data_nfc = data_mf;*/
+		  }   
+		  
+		  if(data_nfc.length() > 0) {
+			  System.out.println("Nfc readMifare_SB Good data read : "+data_nfc.length());
+			  callbackContext.success(data_nfc);
+		  } else {
+			  System.out.println("Nfc readMifare_SB Error data read : "+data_nfc.length());
+			  callbackContext.error("Error Nfc readMifare_SB Error data read");
+		  }
+	    } catch (IOException e) {
+	    	System.out.println("Nfc readMifare_SB IOException");
+	    	callbackContext.error("Error Nfc readMifare_SB IOException");
+	    	//Log.e(TAG, "No Conecto", e);
+	    } finally {
+	      if (mfc != null) {
+	        try {
+	          mfc.close();
+	        } catch (IOException e) {
+	        	System.out.println("Nfc readMifare_SB IOException In Closing mfc");
+        		//Log.e(TAG, "Error closing tag...", e);
+	        }
+	     }
+	   }	
     }
 
     private void init(CallbackContext callbackContext) {
@@ -763,4 +862,40 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
         }
 
     }
+	
+	private String getHexaString(byte[] data) {
+		cardNumber = bytesToString(data);
+		return cardNumber; 
+	}
+	
+    private static String bytesToString(byte[] ary) {
+		final StringBuilder result = new StringBuilder();
+		
+		for(int i = 0; i < ary.length; ++i) {
+			System.out.println((char)ary[i]);
+			result.append(Character.valueOf((char)ary[i]));
+		}
+		
+		//ByteArrayInputStream bInput = new ByteArrayInputStream(result, "UTF-8");
+		
+		//ByteArrayInputStream instream = new ByteArrayInputStream(result);
+		//InputStreamReader in = new InputStreamReader(instream, "UTF-8");
+		
+	
+		/*
+		char[] buffer = new char[4096];
+		InputStreamReader reader = new InputStreamReader(ary, "UTF-8");
+		int charsRead;
+		while ((charsRead = reader.read(buffer)) != -1) {
+			result.append(buffer, 0, charsRead);
+		}
+		*/
+		
+		return result.toString();
+		//return result.toString();
+		//String result_return = new String(result, "UTF-8");
+		//return result_return;
+		
+		//return result.toString().getBytes("UTF-8");
+	}
 }
